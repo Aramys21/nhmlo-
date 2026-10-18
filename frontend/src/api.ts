@@ -4,18 +4,18 @@ export const API = '/api/v1'
 
 export type User = { id: number; username: string; email: string; first_name: string; last_name: string; role: 'traveler' | 'organizer' | 'admin' }
 export type Category = { id: number; name: string; slug: string; description: string }
-export type PickupPoint = { id?: number; name: string; description: string; latitude: number; longitude: number; estimated_time: string | null; position: number }
+export type PickupPoint = { id?: number; name: string; description: string; latitude: number; longitude: number; estimated_time: string | null; position: number; is_active: boolean }
 export type Photo = { id: number; image: string; caption: string; position: number }
 export type Trip = {
   id: number; organizer: number; organizer_name: string; organizer_verification: string; organizer_current_user_role: string | null; organizer_average_rating: number | null; organizer_review_count: number; category: number; category_name: string
-  title: string; description: string; universe: 'voyages' | 'nature'; activity_type: string; accommodation: string; board: string; destination: string; departure_region: string; start_at: string; end_at: string | null
+  title: string; description: string; universe: 'voyages' | 'nature'; activity_type: string; accommodation: string; board: string; destination: string; destination_latitude: number | null; destination_longitude: number | null; destination_estimated_time: string | null; departure_region: string; start_at: string; end_at: string | null
   duration_days: number; price: string; capacity: number; confirmed_seats: number; available_seats: number; difficulty: string; family_friendly: boolean
   review_count: number; average_activity_rating: number | null
-  itinerary: string; requirements: string; included: string; excluded: string; cancellation_policy: string; meeting_name: string
+  itinerary: string; requirements: string; included: string; excluded: string; cancellation_policy: string; meeting_name: string; meeting_time: string | null
   meeting_latitude: number | null; meeting_longitude: number | null; pickup_points: PickupPoint[]; photos: Photo[]; status: string; featured: boolean
   route_geojson: GeoJsonObject | null
 }
-export type Booking = { id: number; trip_id: number; trip_title: string; destination: string; start_at: string; end_at: string | null; price_per_person: string; traveler_name: string; pickup_point: number | null; pickup_point_name: string | null; quantity: number; status: string; review_id: number | null; review_eligible: boolean; created_at: string }
+export type Booking = { id: number; trip_id: number; trip_title: string; destination: string; start_at: string; end_at: string | null; price_per_person: string; traveler_name: string; pickup_point: number | null; pickup_point_name: string | null; pickup_name: string; pickup_description: string; pickup_latitude: string | null; pickup_longitude: string | null; pickup_time: string | null; quantity: number; status: string; review_id: number | null; review_eligible: boolean; created_at: string }
 export type Organization = { id: number; owner: number; owner_name: string; kind: string; name: string; about: string; region: string; logo: string; cover: string; public_email: string; public_phone: string; website: string; instagram: string; facebook: string; tiktok: string; verification: string; verification_note: string; average_rating: number | null; review_count: number; current_user_role: string | null }
 export type Organizer = Organization
 export type OrganizationMember = { id: number; user: number; username: string; email: string; user_email?: string; role: string; created_at: string }
