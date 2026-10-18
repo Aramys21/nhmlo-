@@ -14,6 +14,11 @@ class BookingSerializer(serializers.ModelSerializer):
     end_at = serializers.DateTimeField(source="trip.end_at", read_only=True)
     price_per_person = serializers.DecimalField(source="trip.price", max_digits=10, decimal_places=2, read_only=True)
     pickup_point_name = serializers.CharField(source="pickup_point.name", read_only=True, allow_null=True)
+    pickup_name = serializers.CharField(source="pickup_name_snapshot", read_only=True)
+    pickup_description = serializers.CharField(source="pickup_description_snapshot", read_only=True)
+    pickup_latitude = serializers.DecimalField(source="pickup_latitude_snapshot", max_digits=9, decimal_places=6, read_only=True, allow_null=True)
+    pickup_longitude = serializers.DecimalField(source="pickup_longitude_snapshot", max_digits=9, decimal_places=6, read_only=True, allow_null=True)
+    pickup_time = serializers.TimeField(source="pickup_time_snapshot", read_only=True, allow_null=True)
     pickup_point = serializers.PrimaryKeyRelatedField(queryset=PickupPoint.objects.all(), required=False, allow_null=True)
     traveler_name = serializers.CharField(source="traveler.get_full_name", read_only=True)
     review_id = serializers.SerializerMethodField()
@@ -21,7 +26,7 @@ class BookingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Booking
-        fields = ("id", "trip", "trip_id", "trip_title", "destination", "start_at", "end_at", "price_per_person", "traveler_name", "pickup_point", "pickup_point_name", "quantity", "status", "review_id", "review_eligible", "created_at", "updated_at")
+        fields = ("id", "trip", "trip_id", "trip_title", "destination", "start_at", "end_at", "price_per_person", "traveler_name", "pickup_point", "pickup_point_name", "pickup_name", "pickup_description", "pickup_latitude", "pickup_longitude", "pickup_time", "quantity", "status", "review_id", "review_eligible", "created_at", "updated_at")
         read_only_fields = ("id", "trip_id", "traveler_name", "status", "created_at", "updated_at")
 
     def get_review_id(self, obj):
