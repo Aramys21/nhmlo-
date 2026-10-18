@@ -29,11 +29,26 @@ def create_booking(*, traveler, trip, quantity, pickup_point=None):
         raise ValidationError("Réservez au moins une place.")
     if pickup_point and pickup_point.trip_id != trip.pk:
         raise ValidationError("Ce point de ramassage ne correspond pas à cette annonce.")
+    if pickup_point and not pickup_point.is_active:
+        raise ValidationError("Ce point de ramassage n'est plus disponible.")
     if trip.organizer.memberships.filter(user=traveler).exists():
         raise ValidationError("Les membres de l'organisation ne peuvent pas réserver leurs propres activités.")
     if confirmed_seats(trip) + quantity > trip.capacity:
         raise ValidationError("Il ne reste pas assez de places disponibles.")
-    booking = Booking.objects.create(traveler=traveler, trip=trip, quantity=quantity, pickup_point=pickup_point)
+    if trip.declared_available_seats < quantity:
+        raise ValidationError("La disponibilité déclarée par l'organisateur ne permet pas cette demande.")
+    pickup = pickup_point or None
+    booking = Booking.objects.create(
+        traveler=traveler,
+        trip=trip,
+        quantity=quantity,
+        pickup_point=pickup,
+        pickup_name_snapshot=pickup.name if pickup else trip.meeting_name or trip.departure_region or "Départ du bus",
+        pickup_description_snapshot=pickup.description if pickup else "",
+        pickup_latitude_snapshot=pickup.latitude if pickup else trip.meeting_latitude,
+        pickup_longitude_snapshot=pickup.longitude if pickup else trip.meeting_longitude,
+        pickup_time_snapshot=pickup.estimated_time if pickup else trip.meeting_time,
+    )
     notify_booking_managers(trip.organizer, booking, f"Nouvelle demande de réservation pour « {trip.title} ».")
     return booking
 
@@ -75,14 +90,6 @@ def change_booking_status(*, booking, actor, target_status):
 
     booking.status = target_status
     booking.save(update_fields=("status", "updated_at"))
-
-    seats = confirmed_seats(trip)
-    if target_status == Booking.Status.CONFIRMED and seats >= trip.capacity:
-        trip.status = trip.Status.FULL
-        trip.save(update_fields=("status", "updated_at"))
-    elif target_status in (Booking.Status.TRAVELER_CANCELLED, Booking.Status.ORGANIZER_CANCELLED) and trip.status == trip.Status.FULL and seats < trip.capacity:
-        trip.status = trip.Status.PUBLISHED
-        trip.save(update_fields=("status", "updated_at"))
 
     message = f"Votre réservation pour « {trip.title} » : {booking.get_status_display().lower()}."
     if target_status in (Booking.Status.CONFIRMED, Booking.Status.DECLINED, Booking.Status.ORGANIZER_CANCELLED):
