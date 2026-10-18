@@ -4,10 +4,12 @@ Rihla réunit les séjours premium et les activités de plein air dans une plate
 
 ## Fonctionnalités
 
-- Deux univers visuels et éditoriaux : **Voyages & Évasions** et **Randonnées & Camping**, avec des filtres adaptés à chaque type d'activité.
+- Deux univers visuels et éditoriaux : **Voyages & Évasions** (hôtels, resorts avec piscine et séjours en Algérie ou à l'international) et **Randonnées & Camping** (treks, bivouacs et activités de plein air), avec des filtres adaptés à chaque type d'activité.
 - Profils publics d'agences, de clubs et d'associations, avec plusieurs membres et des permissions par organisation.
 - Vérification des organisations par un administrateur, à partir de justificatifs privés et d'une décision motivée.
 - Annonces, demandes de réservation, gestion de capacité et notifications.
+- Itinéraires de bus avec départ, arrêts ordonnés et arrivée géolocalisés; les demandes conservent un instantané du point de montée choisi.
+- Disponibilité restante déclarée manuellement par l'organisateur; une demande ou son acceptation ne modifie pas le compteur.
 - Avis liés à une réservation terminée, notes par critères, signalements et modération administrateur.
 - Interface d'administration Django et tableaux de bord adaptés aux rôles.
 
@@ -95,7 +97,9 @@ L'API est sur `http://localhost:8000` et l'interface de développement sur `http
 
 ## Cartographie
 
-La carte s'appuie sur OpenStreetMap. La recherche de lieu est déclenchée depuis le formulaire et mise en cache dans la session du navigateur; il n'y a pas d'autocomplétion. Le service public Nominatim est réservé à un usage modéré et limite l'application à une requête par seconde au total. Une audience plus importante doit utiliser un fournisseur compatible ou un service dédié. Les URL du géocodeur et des tuiles sont configurables dans `frontend/.env`.
+La carte s'appuie sur OpenStreetMap. Les organisateurs enregistrent les coordonnées réelles du départ, des arrêts et de l'arrivée, ainsi que l'ordre et les horaires prévisionnels. La ligne affichée n'existe que lorsqu'un GeoJSON a été fourni; aucun itinéraire routier ni temps de trajet n'est calculé ou inventé. La liste textuelle des étapes reste disponible sous la carte. Les demandes conservent une copie du lieu, de l'horaire et des consignes sélectionnés afin qu'une modification ultérieure de l'itinéraire ne change pas l'historique. La disponibilité restante est déclarée manuellement; les demandes et confirmations ne la décrémentent pas. L'export CSV des participants est disponible dans l'espace organisateur pour les membres disposant du droit de gestion des réservations.
+
+La recherche de lieu est déclenchée depuis le formulaire et mise en cache dans la session du navigateur; il n'y a pas d'autocomplétion. Le service public Nominatim est réservé à un usage modéré et limite l'application à une requête par seconde au total. Une audience plus importante doit utiliser un fournisseur compatible ou un service dédié. Les URL du géocodeur et des tuiles sont configurables dans `frontend/.env`.
 
 ## Déploiement
 
