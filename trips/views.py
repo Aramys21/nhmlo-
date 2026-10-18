@@ -90,7 +90,7 @@ class TripViewSet(viewsets.ModelViewSet):
                 except (TypeError, ValueError, InvalidOperation):
                     raise ValidationError({parameter: "Valeur de filtre invalide."})
         if params.get("available") in ("true", "1"):
-            qs = qs.filter(confirmed_seats__lt=F("capacity"))
+            qs = qs.filter(declared_available_seats__gt=0)
         if params.get("featured") in ("true", "1"):
             qs = qs.filter(featured=True)
         ordering = params.get("ordering")
