@@ -43,12 +43,15 @@ class Trip(models.Model):
     accommodation = models.CharField(max_length=80, blank=True)
     board = models.CharField(max_length=80, blank=True)
     destination = models.CharField(max_length=120, db_index=True)
+    destination_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    destination_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
     departure_region = models.CharField(max_length=120, blank=True)
     start_at = models.DateTimeField(db_index=True)
     end_at = models.DateTimeField(null=True, blank=True)
     duration_days = models.PositiveSmallIntegerField(default=1)
     price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
     capacity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    declared_available_seats = models.PositiveIntegerField(null=True, blank=True)
     difficulty = models.CharField(max_length=12, choices=Difficulty.choices, blank=True)
     family_friendly = models.BooleanField(default=False)
     itinerary = models.TextField(blank=True)
@@ -57,8 +60,10 @@ class Trip(models.Model):
     excluded = models.TextField(blank=True)
     cancellation_policy = models.TextField(blank=True)
     meeting_name = models.CharField(max_length=150, blank=True)
+    meeting_time = models.TimeField(null=True, blank=True)
     meeting_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
     meeting_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
+    destination_estimated_time = models.TimeField(null=True, blank=True)
     route_geojson = models.JSONField(null=True, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT, db_index=True)
     featured = models.BooleanField(default=False)
@@ -70,6 +75,7 @@ class Trip(models.Model):
         indexes = [models.Index(fields=("status", "start_at")), models.Index(fields=("destination", "start_at"))]
         constraints = [
             models.CheckConstraint(condition=Q(capacity__gte=1), name="trip_capacity_at_least_one"),
+            models.CheckConstraint(condition=Q(declared_available_seats__isnull=True) | Q(declared_available_seats__lte=models.F("capacity")), name="trip_declared_seats_not_over_capacity"),
             models.CheckConstraint(condition=Q(price__gte=0), name="trip_price_nonnegative"),
             models.CheckConstraint(condition=Q(meeting_latitude__isnull=True) | Q(meeting_latitude__gte=-90, meeting_latitude__lte=90), name="trip_meeting_latitude_bounds"),
             models.CheckConstraint(condition=Q(meeting_longitude__isnull=True) | Q(meeting_longitude__gte=-180, meeting_longitude__lte=180), name="trip_meeting_longitude_bounds"),
@@ -77,6 +83,11 @@ class Trip(models.Model):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        if self.declared_available_seats is None:
+            self.declared_available_seats = self.capacity
+        super().save(*args, **kwargs)
 
 
 class TripPhoto(models.Model):
@@ -97,6 +108,7 @@ class PickupPoint(models.Model):
     longitude = models.DecimalField(max_digits=9, decimal_places=6, validators=[MinValueValidator(-180), MaxValueValidator(180)])
     estimated_time = models.TimeField(null=True, blank=True)
     position = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ("position", "id")
