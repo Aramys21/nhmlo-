@@ -15,7 +15,7 @@ from bookings.models import Booking
 from bookings.services import change_booking_status, confirmed_seats
 from organizers.models import Organizer, OrganizationMembership
 from notifications.models import Notification
-from trips.models import Category, Trip
+from trips.models import Category, PickupPoint, Trip
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"], SECURE_SSL_REDIRECT=False)
@@ -33,12 +33,60 @@ class BookingFlowTests(TestCase):
         client.force_authenticate(user)
         return client.post("/api/v1/bookings/", {"trip": (trip or self.trip).id, "quantity": quantity}, format="json")
 
-    def test_pending_requests_do_not_consume_capacity_and_confirmation_does(self):
+    def test_booking_keeps_pickup_details_after_organizer_removes_stop(self):
+        point = PickupPoint.objects.create(
+            trip=self.trip, name="Gare de Blida", description="Devant l'entrée principale",
+            latitude=Decimal("36.4700"), longitude=Decimal("2.8300"), estimated_time="07:00", position=0,
+        )
+        client = APIClient()
+        client.force_authenticate(self.traveler)
+        response = client.post("/api/v1/bookings/", {"trip": self.trip.id, "quantity": 1, "pickup_point": point.id}, format="json")
+        self.assertEqual(response.status_code, 201)
+        booking_id = response.data["id"]
+
+        point.delete()
+        response = client.get(f"/api/v1/bookings/{booking_id}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["pickup_name"], "Gare de Blida")
+        self.assertEqual(response.data["pickup_description"], "Devant l'entrée principale")
+        self.assertEqual(response.data["pickup_time"], "07:00:00")
+
+    def test_booking_does_not_decrement_manual_availability(self):
+        initial_available = self.trip.capacity - confirmed_seats(self.trip)
+        response = self.make_request(self.traveler)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.trip.capacity - confirmed_seats(self.trip), initial_available)
+
+    def test_inactive_pickup_point_cannot_be_selected(self):
+        point = PickupPoint.objects.create(
+            trip=self.trip, name="Arrêt fermé", latitude=Decimal("36.4700"),
+            longitude=Decimal("2.8300"), position=0, is_active=False,
+        )
+        client = APIClient()
+        client.force_authenticate(self.traveler)
+        response = client.post("/api/v1/bookings/", {"trip": self.trip.id, "quantity": 1, "pickup_point": point.id}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_organizer_can_set_declared_availability_but_not_above_capacity(self):
+        client = APIClient()
+        client.force_authenticate(self.organizer_user)
+        response = client.patch(f"/api/v1/trips/{self.trip.id}/", {"available_seats": 1}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.trip.refresh_from_db()
+        self.assertEqual(self.trip.declared_available_seats, 1)
+
+        response = client.patch(f"/api/v1/trips/{self.trip.id}/", {"available_seats": 3}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.trip.refresh_from_db()
+        self.assertEqual(self.trip.declared_available_seats, 1)
+
+    def test_pending_requests_and_confirmations_do_not_consume_declared_availability(self):
         first = self.make_request(self.traveler)
         second_user = User.objects.create_user(username="walker2", email="walker2@example.test", password="Soleil!Rando2026")
         second = self.make_request(second_user, quantity=2)
         self.assertEqual(first.status_code, 201)
         self.assertEqual(second.status_code, 201)
+        self.assertEqual(self.trip.declared_available_seats, 2)
         self.assertTrue(Notification.objects.filter(recipient=self.organizer_user, booking_id=first.data["id"]).exists())
         self.assertEqual(confirmed_seats(self.trip), 0)
         organizer_client = APIClient()
@@ -49,21 +97,24 @@ class BookingFlowTests(TestCase):
         self.assertEqual(refused_for_capacity.status_code, 400)
         self.trip.refresh_from_db()
         self.assertEqual(self.trip.status, Trip.Status.PUBLISHED)
+        self.assertEqual(self.trip.declared_available_seats, 2)
         self.assertEqual(confirmed_seats(self.trip), 1)
 
-    def test_full_trip_is_marked_full_and_cancellation_reopens_a_place(self):
+    def test_confirming_and_cancelling_does_not_change_declared_availability(self):
         created = self.make_request(self.traveler, quantity=2)
         organizer_client = APIClient()
         organizer_client.force_authenticate(self.organizer_user)
         self.assertEqual(organizer_client.post(f"/api/v1/bookings/{created.data['id']}/confirm/", {}, format="json").status_code, 200)
         self.trip.refresh_from_db()
-        self.assertEqual(self.trip.status, Trip.Status.FULL)
+        self.assertEqual(self.trip.status, Trip.Status.PUBLISHED)
+        self.assertEqual(self.trip.declared_available_seats, 2)
         self.assertEqual(APIClient().get(f"/api/v1/trips/{self.trip.id}/").status_code, 200)
         traveler_client = APIClient()
         traveler_client.force_authenticate(self.traveler)
         self.assertEqual(traveler_client.post(f"/api/v1/bookings/{created.data['id']}/cancel/", {}, format="json").status_code, 200)
         self.trip.refresh_from_db()
         self.assertEqual(self.trip.status, Trip.Status.PUBLISHED)
+        self.assertEqual(self.trip.declared_available_seats, 2)
         self.assertEqual(confirmed_seats(self.trip), 0)
 
     def test_capacity_cannot_be_lowered_below_confirmed_seats(self):
