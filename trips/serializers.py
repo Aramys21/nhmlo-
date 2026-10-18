@@ -18,7 +18,7 @@ class CategorySerializer(serializers.ModelSerializer):
 class PickupPointSerializer(serializers.ModelSerializer):
     class Meta:
         model = PickupPoint
-        fields = ("id", "name", "description", "latitude", "longitude", "estimated_time", "position")
+        fields = ("id", "name", "description", "latitude", "longitude", "estimated_time", "position", "is_active")
         read_only_fields = ("id",)
 
 
@@ -48,7 +48,7 @@ class TripSerializer(serializers.ModelSerializer):
     pickup_points = PickupPointSerializer(many=True, required=False)
     photos = TripPhotoSerializer(many=True, read_only=True)
     confirmed_seats = serializers.IntegerField(read_only=True)
-    available_seats = serializers.SerializerMethodField()
+    available_seats = serializers.IntegerField(source="declared_available_seats", min_value=0, required=False)
     review_count = serializers.SerializerMethodField()
     average_activity_rating = serializers.SerializerMethodField()
 
@@ -56,20 +56,14 @@ class TripSerializer(serializers.ModelSerializer):
         model = Trip
         fields = (
             "id", "organizer", "organization_id", "organizer_name", "organizer_verification", "organizer_current_user_role", "organizer_average_rating", "organizer_review_count", "category", "category_name",
-            "title", "description", "universe", "activity_type", "accommodation", "board", "destination", "departure_region", "start_at", "end_at",
+            "title", "description", "universe", "activity_type", "accommodation", "board", "destination", "destination_latitude", "destination_longitude", "departure_region", "start_at", "end_at",
             "duration_days", "price", "capacity", "confirmed_seats", "available_seats", "difficulty",
             "review_count", "average_activity_rating",
             "family_friendly", "itinerary", "requirements", "included", "excluded", "cancellation_policy",
-            "meeting_name", "meeting_latitude", "meeting_longitude", "route_geojson", "pickup_points", "photos",
+            "meeting_name", "meeting_time", "meeting_latitude", "meeting_longitude", "destination_estimated_time", "route_geojson", "pickup_points", "photos",
             "status", "featured", "created_at", "updated_at",
         )
         read_only_fields = ("status", "featured", "created_at", "updated_at", "confirmed_seats")
-
-    def get_available_seats(self, obj):
-        confirmed = getattr(obj, "confirmed_seats", None)
-        if confirmed is None:
-            confirmed = confirmed_seats(obj)
-        return max(obj.capacity - confirmed, 0)
 
     def _review_stats(self, obj):
         from reviews.models import Review
@@ -109,6 +103,10 @@ class TripSerializer(serializers.ModelSerializer):
         end = attrs.get("end_at", getattr(self.instance, "end_at", None))
         if start and end and end <= start:
             raise serializers.ValidationError({"end_at": "La date de retour doit suivre la date de départ."})
+        capacity = attrs.get("capacity", getattr(self.instance, "capacity", None))
+        available = attrs.get("declared_available_seats", getattr(self.instance, "declared_available_seats", capacity))
+        if capacity is not None and available is not None and available > capacity:
+            raise serializers.ValidationError({"available_seats": "Les places restantes ne peuvent pas dépasser la capacité totale."})
         points = attrs.get("pickup_points", [])
         positions = [point.get("position", index) for index, point in enumerate(points)]
         if len(positions) != len(set(positions)):
@@ -141,7 +139,7 @@ class TripSerializer(serializers.ModelSerializer):
         for field, value in validated_data.items():
             setattr(trip, field, value)
         if trip.status in (Trip.Status.PUBLISHED, Trip.Status.FULL):
-            trip.status = Trip.Status.FULL if confirmed_seats(trip) >= trip.capacity else Trip.Status.PUBLISHED
+            trip.status = Trip.Status.FULL if trip.declared_available_seats == 0 else Trip.Status.PUBLISHED
         trip.save()
         if points is not None:
             trip.pickup_points.all().delete()
